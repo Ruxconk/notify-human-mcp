@@ -12,6 +12,8 @@ import json
 import urllib.error
 import urllib.request
 
+from . import USER_AGENT
+
 #: Discord's limit for a message's `content` field.
 DISCORD_MAX_CONTENT = 2000
 
@@ -26,8 +28,6 @@ HTTP_TIMEOUT = 15
 
 #: Blurple — Discord's own brand colour, used for embed cards.
 EMBED_COLOR = 0x5865F2
-
-USER_AGENT = "notify-human-mcp/0.1"
 
 
 def truncate_message(text, limit=DISCORD_MAX_CONTENT):
