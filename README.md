@@ -10,14 +10,16 @@ each model's habits.
 The server reads your instructions file at every client launch and hands the text to
 the MCP client as its `instructions` field. The client injects it into the LLM's
 system prompt each session — the same effect as AGENTS.md, per tool. Edit the file,
-and the next session on that machine uses the new format. The LLM never sees the file
-path or URL, only the text.
+and the next session on that machine uses the new format. That text lives in the
+conversation history, so it is summarized away when the conversation is compacted;
+the `send` tool description therefore also carries the file path with a conditional
+hint to re-read it if the rules are no longer in context.
 
 One tool is exposed:
 
 | Tool | Args | Behaviour |
 |---|---|---|
-| `send` | `message: str` (required), `embed: bool = False` | Posts to your Discord webhook. `embed=False` → markdown text (truncated at 2000 chars with a `... (truncated)` note); `embed=True` → rich embed card (4096-char limit). Returns a short status string. |
+| `send` | `message: str` (required), `embed: bool = False` | Posts to your Discord webhook. `embed=False` → markdown text; `embed=True` → rich embed card. Messages over the limit (2000 plain / 4096 embed) are **rejected with the limit named**, not truncated, so the caller can shorten and retry. Returns a short status string. |
 
 If no webhook URL is configured, `send` fails with a clear error and posts nothing.
 
@@ -61,7 +63,13 @@ For a local checkout, replace the git URL with the directory path:
 Instructions are resolved in order: **file → URL → built-in default**. A missing file
 or failed fetch falls through silently — the server always starts.
 
-Restart the client after editing the file; the server re-reads it on every launch.
+**Restart the MCP client after changing anything.** A stdio server is one long-lived
+process: it reads its code, its env and the instructions file at launch and never
+looks again. Editing the instructions file, changing an env var, or shipping a new
+version does nothing until the client restarts the server — and when you install from
+a local path, `uvx` caches the built wheel per content hash, so a rebuilt package
+needs that same restart to take effect. If notifications come back in the old format
+after you edited the file, this is why.
 
 ### Writing the instructions file
 
@@ -88,7 +96,7 @@ you.
 
 ```bash
 uv sync                          # env + dev deps
-uv run pytest -q                 # 58 tests, HTTP fully mocked, zero real sockets
+uv run pytest -q                 # 66 tests, HTTP mocked or loopback-only, zero real sockets
 uvx ruff check src tests         # lint
 uvx ruff format --check src tests
 uv build                         # sdist + wheel into dist/
