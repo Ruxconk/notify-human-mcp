@@ -1,0 +1,15 @@
+# local-only planning docs (kept on disk, never shipped/committed)
+requirements.md
+PUBLISHING.md
+
+# editors
+.swp
+*.swp
+*.swo
+
+# python build / packaging
+__pycache__/
+*.egg-info/
+.venv/
+dist/
+build/
