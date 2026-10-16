@@ -15,6 +15,18 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def tool_schema(tool):
+    """Input schema under both SDK shapes (mcp 2.x input_schema, 1.x inputSchema)."""
+    return getattr(tool, "input_schema", None) or tool.inputSchema
+
+
+def result_text(res):
+    """First text block under both SDK shapes (2.x CallToolResult, 1.x tuple)."""
+    if isinstance(res, tuple):  # mcp 1.x: (content_blocks, structured)
+        return res[0][0].text
+    return res.content[0].text
+
+
 # --- server construction ----------------------------------------------------
 
 
@@ -36,7 +48,7 @@ def test_exactly_one_tool_named_send():
 
 def test_send_schema_requires_message_and_defaults_embed():
     tool = run(server.build_server().list_tools())[0]
-    schema = tool.input_schema
+    schema = tool_schema(tool)
     assert schema["required"] == ["message"]
     assert schema["properties"]["message"]["type"] == "string"
     assert schema["properties"]["embed"]["default"] is False
@@ -100,7 +112,7 @@ def test_send_plain_posts_content_payload():
     url, payload = m.call_args[0]
     assert url == "http://127.0.0.1:9/hook"
     assert payload == {"content": msg}
-    text = res.content[0].text
+    text = result_text(res)
     assert "sent" in text and str(len(msg)) in text and "embed=False" in text
 
 
@@ -110,7 +122,7 @@ def test_send_embed_posts_embed_payload():
         res = run(s.call_tool("send", {"message": "hi", "embed": True}))
     _, payload = m.call_args[0]
     assert payload["embeds"][0]["description"] == "hi"
-    assert "embed=True" in res.content[0].text
+    assert "embed=True" in result_text(res)
 
 
 def test_send_rejects_over_limit_plain_and_posts_nothing():
