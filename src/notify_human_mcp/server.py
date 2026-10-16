@@ -34,10 +34,13 @@ SERVER_NAME = "notify-human"
 
 SEND_DESCRIPTION = (
     "Send one notification to the human's Discord whenever their attention is "
-    "needed: you are blocked, need a decision or missing info, something important "
-    "happened mid-task, you finished a task, or the user asked to be pinged. "
-    "Set embed=True for a rich card instead of plain markdown."
+    "needed: you are blocked, need a decision or missing info, have a question or "
+    "warning about the current task, something important happened mid-task, you "
+    "finished, or the user asked to be pinged. One message per event — do not spam "
+    "the user. Keep it short: plain messages truncate at 2000 characters, embeds at "
+    "4096. Set embed=True for a rich card instead of plain markdown."
 )
+
 
 def build_server(instructions=None, webhook_url=None):
     """Build the MCP server.
@@ -47,7 +50,9 @@ def build_server(instructions=None, webhook_url=None):
     """
     server = MCPServer(
         name=SERVER_NAME,
-        instructions=instructions if instructions is not None else config.DEFAULT_INSTRUCTIONS,
+        instructions=instructions
+        if instructions is not None
+        else config.DEFAULT_INSTRUCTIONS,
     )
     url = webhook_url if webhook_url is not None else config.get_webhook_url()
 
