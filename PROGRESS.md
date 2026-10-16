@@ -184,18 +184,37 @@ items stand unchanged.
 > `notify-human: instructions from file (61 chars), webhook set`, confirming the
 > startup log. No real Discord contact: every URL was 127.0.0.1.
 
-- [ ] **T6 — README replacement.** Overwrite the 18-byte stub with: what it is (one
+- [x] **T6 — README replacement.** Overwrite the 18-byte stub with: what it is (one
   tool, `send`), install/run via `uvx notify-human-mcp`, the per-machine client config
   block from PUBLISHING.md (command + the three env vars), how to set the instructions
   file and that edits take effect next session, the file→URL→default order, the trust
   note about a hosted URL, and the **publish commands as documentation only**:
   `uv build` then `uv publish` (or `python -m build` + `twine upload dist/*`), plus a
   clearly-labeled optional later step for the MCP Registry listing.
+>
+> **Comment (T6):** README rewritten (3.6 KB): what it is, tool table, `uvx` install,
+> JSON config block, env-var table, resolution order, example instructions file,
+> hosted-URL trust note, dev commands, publish commands marked "prepared — not yet
+> run", MCP Registry as optional-later. Commit `1230ada`.
 
-- [ ] **T7 — PyPI publish PREPARED, NOT run.** Run `uv build`; inspect `dist/` (sdist +
+- [x] **T7 — PyPI publish PREPARED, NOT run.** Run `uv build`; inspect `dist/` (sdist +
   wheel, entry point present — `unzip -l` / `tar tzf`); smoke the built wheel in a
   throwaway venv (`uvx --from dist/...whl notify-human-mcp`). **Do NOT run
   `uv publish`** — needs the user's PyPI account/token.
+>
+> **Comment (T7):** `uv build` → sdist + wheel; wheel contains all 4 modules +
+> `entry_points.txt` (`notify-human-mcp = notify_human_mcp.server:main`) + LICENSE;
+> sdist carries src/tests/README/LICENSE. **Bug caught by the smoke run:** first wheel
+> shipped with **no `mcp` dependency** (`pyproject.toml` lacked
+> `[project] dependencies`) → `uvx --from dist/*.whl` died with `ModuleNotFoundError:
+> No module named 'mcp'`. Fixed: `dependencies = ["mcp>=1.0"]` → rebuild → METADATA
+> shows `Requires-Dist: mcp>=1.0` → `uvx --no-cache --from dist/...whl
+> notify-human-mcp` starts, logs `instructions from file (18 chars), webhook set`,
+> exits 0 on stdin EOF (commit `64af5ab`). Then the full stdio proof driver was rerun
+> against the wheel installed in a clean venv (`/tmp/wheel-venv`, `PROOF_PYTHONPATH=""`
+> so no source tree on the path) → **ALL PROOFS PASSED**. `uv publish` deliberately
+> NOT run.
+
 
 - [ ] **T8 — Final sweep + push.** Verify the working tree is clean, every task above
   has a `> **Comment:**` with command + output, and `requirements.md`/`PUBLISHING.md`
