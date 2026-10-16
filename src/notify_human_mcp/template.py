@@ -29,9 +29,19 @@ import socket
 from datetime import datetime
 from string import Formatter
 
-#: Placeholders usable in header/lines.
+#: Placeholders usable in header/lines. `ticket_line` renders "ticket: X";
+#: `ticket` renders the raw value verbatim (e.g. "ENG-207 — rotate deploy keys").
 PLACEHOLDERS = frozenset(
-    {"time", "repo", "title", "status_emoji", "ticket_line", "model", "machine"}
+    {
+        "time",
+        "repo",
+        "title",
+        "status_emoji",
+        "ticket_line",
+        "ticket",
+        "model",
+        "machine",
+    }
 )
 
 
@@ -93,6 +103,12 @@ def load_template(path):
     max_chars = data.get("max_chars", 0)
     if not isinstance(max_chars, int) or max_chars < 0:
         raise TemplateError(f"template {path} 'max_chars' must be a non-negative int")
+    embed = data.get("embed", False)
+    if not isinstance(embed, bool):
+        raise TemplateError(f"template {path} 'embed' must be true or false")
+    guidance = data.get("guidance")
+    if guidance is not None and not isinstance(guidance, str):
+        raise TemplateError(f"template {path} 'guidance' must be a string")
 
     for field in [header, *lines]:
         unknown = _names_in(field) - PLACEHOLDERS
@@ -107,6 +123,8 @@ def load_template(path):
         "lines": lines,
         "statuses": statuses,
         "max_chars": max_chars,
+        "embed": embed,
+        "guidance": guidance,
     }
 
 
@@ -144,6 +162,7 @@ def render_message(
         or os.path.basename(os.getcwd()),
         "title": title.strip(),
         "status_emoji": tmpl["statuses"][status],
+        "ticket": ticket.strip() if ticket and ticket.strip() else "",
         "ticket_line": f"ticket: {ticket.strip()}" if ticket and ticket.strip() else "",
         "model": model or os.environ.get("NOTIFY_HUMAN_MODEL") or "unknown",
         "machine": machine
@@ -187,6 +206,9 @@ def build_llm_text(tmpl):
         "- `body`: what matters, short bullets, no raw logs.",
         "- `ticket`: tracker id if the work has one (optional).",
     ]
+    if tmpl.get("guidance"):
+        lines.append("")
+        lines.append(tmpl["guidance"])
     if limit:
         lines.append(f"- The finished message must stay under {limit} characters.")
     return "\n".join(lines)

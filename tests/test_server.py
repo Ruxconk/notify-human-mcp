@@ -293,3 +293,29 @@ def test_template_mode_respects_max_chars(tmp_path):
         )
     m.assert_not_called()
     assert "1000" in str(ei.value)
+
+
+def test_template_mode_embed_flag_posts_card(tmp_path):
+    import json as _json
+
+    from notify_human_mcp import template
+
+    p = tmp_path / "t.json"
+    p.write_text(
+        _json.dumps(
+            {
+                "header": "{title} {status_emoji}",
+                "lines": [],
+                "statuses": {"done": "✅"},
+                "embed": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    t = template.load_template(p)
+    s = server.build_server(template=t, webhook_url="http://127.0.0.1:9/hook")
+    with _ok() as m:
+        run(s.call_tool("send", {"status": "done", "title": "T", "body": "b"}))
+    _, payload = m.call_args[0]
+    assert "embeds" in payload
+    assert payload["embeds"][0]["description"].startswith("T ✅")

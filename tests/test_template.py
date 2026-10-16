@@ -106,3 +106,65 @@ def test_shipped_examples_all_load():
     for f in files:
         t = template.load_template(f)  # raises TemplateError if broken
         assert t["statuses"]
+
+
+# --- embed + guidance + raw ticket (faithful prose conversion) ---------------
+
+
+def test_load_accepts_embed_and_guidance(tmp_path):
+    t = dict(GOOD, embed=True, guidance="be warm")
+    loaded = template.load_template(write_template(tmp_path, t))
+    assert loaded["embed"] is True
+    assert loaded["guidance"] == "be warm"
+
+
+def test_load_defaults_embed_false_guidance_none(tmp_path):
+    loaded = template.load_template(write_template(tmp_path))
+    assert loaded["embed"] is False
+    assert loaded["guidance"] is None
+
+
+def test_load_rejects_non_bool_embed(tmp_path):
+    bad = dict(GOOD, embed="yes")
+    with pytest.raises(template.TemplateError) as ei:
+        template.load_template(write_template(tmp_path, bad))
+    assert "embed" in str(ei.value)
+
+
+def test_load_rejects_non_string_guidance(tmp_path):
+    bad = dict(GOOD, guidance=42)
+    with pytest.raises(template.TemplateError) as ei:
+        template.load_template(write_template(tmp_path, bad))
+    assert "guidance" in str(ei.value)
+
+
+def test_raw_ticket_placeholder_renders_verbatim(tmp_path):
+    t = template.load_template(write_template(tmp_path, dict(GOOD, lines=["{ticket}"])))
+    msg = template.render_message(
+        t,
+        status="done",
+        title="T",
+        body="b",
+        ticket="ENG-207 — rotate deploy keys",
+        now=NOW,
+        repo="r",
+        machine="m",
+    )
+    assert "ENG-207 — rotate deploy keys" in msg
+    assert "ticket:" not in msg
+
+
+def test_empty_ticket_drops_raw_ticket_line(tmp_path):
+    t = template.load_template(write_template(tmp_path, dict(GOOD, lines=["{ticket}"])))
+    msg = template.render_message(
+        t, status="done", title="T", body="b", now=NOW, repo="r", machine="m"
+    )
+    assert "\n\n" in msg  # line dropped, body follows header block
+
+
+def test_guidance_appended_to_llm_text(tmp_path):
+    t = template.load_template(
+        write_template(tmp_path, dict(GOOD, guidance="Address him as Rux."))
+    )
+    text = template.build_llm_text(t)
+    assert "Address him as Rux." in text

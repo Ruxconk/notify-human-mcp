@@ -147,6 +147,7 @@ def _register_template_send(server, url, tmpl):
         body: str,
         ticket: str = "",
         model: str = "",
+        repo: str = "",
     ) -> str:
         """Assemble a notification from the template and post it."""
         if not url:
@@ -162,11 +163,22 @@ def _register_template_send(server, url, tmpl):
                 body=body,
                 ticket=ticket or None,
                 model=model or None,
+                repo=repo or None,
             )
         except template_mod.TemplateError as e:
             raise ToolError(f"{e} Nothing was posted. (statuses: {status_values})")
 
-        payload = discord.build_plain_payload(message)
+        if tmpl.get("embed"):
+            limit = discord.EMBED_DESCRIPTION_MAX
+            payload = discord.build_embed_payload(message)
+        else:
+            limit = discord.DISCORD_MAX_CONTENT
+            payload = discord.build_plain_payload(message)
+        if len(message) > limit:
+            raise ToolError(
+                f"rendered message is {len(message)} chars, over the {limit}-char "
+                "Discord limit; shorten the body. Nothing was posted."
+            )
         ok, detail = discord.send_to_webhook(url, payload)
         if not ok:
             raise ToolError(f"notify-human could not post to Discord ({detail}).")
