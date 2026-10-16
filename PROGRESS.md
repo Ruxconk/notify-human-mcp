@@ -78,8 +78,22 @@ items stand unchanged.
   dependency `mcp`, `[project.scripts] notify-human-mcp = "notify_human_mcp.server:main"`.
   Layout `src/notify_human_mcp/` (`__init__.py`, `config.py`, `discord.py`, `server.py`).
   Acceptance: `uv build` produces sdist + wheel; the console script runs.
+>
+> **Comment (T1):** `pyproject.toml` (hatchling, src layout, `[project.scripts]
+> notify-human-mcp = "notify_human_mcp.server:main"`, dep `mcp>=1`, dev group pytest) +
+> empty `src/notify_human_mcp/` modules. Command: `uv build` →
+> `Successfully built dist/notify_human_mcp-0.1.0.tar.gz` +
+> `notify_human_mcp-0.1.0-py3-none-any.whl`. Commit `eb14270`.
+>
+> **DEVIATION (recorded before T3):** the installed SDK is **mcp 2.3.0**, where
+> `mcp.server.fastmcp.FastMCP` no longer exists — renamed to
+> `mcp.server.mcpserver.MCPServer` (same constructor incl. `instructions=`, same
+> `@server.tool()` decorator, same `run(transport="stdio")`). The "use FastMCP"
+> decision is honored in spirit: same class, current name. Code imports
+> `MCPServer` with a `try/except ImportError` fallback to `FastMCP` so the package
+> works on both mcp 1.x and 2.x.
 
-- [ ] **T2 — Core logic (reused from notify-rux.py).**
+- [x] **T2 — Core logic (reused from notify-rux.py).**
   - `config.py`: webhook URL from `NOTIFY_HUMAN_WEBHOOK_URL` only (no `/etc` fallback,
     no legacy `NOTIFY_RUX_*` names); instructions resolver in order
     `NOTIFY_HUMAN_INSTRUCTIONS_FILE` → `NOTIFY_HUMAN_INSTRUCTIONS_URL` (urllib GET,
@@ -95,10 +109,45 @@ items stand unchanged.
     stdout — stdout is the MCP channel; diagnostics go to stderr.
   - Acceptance: payload builders are pure functions, no I/O.
 
-- [ ] **T3 — FastMCP wiring.** `FastMCP("notify-human", instructions=<resolved text>)`;
-  tool `send(message: str, embed: bool = False) -> str`. Missing webhook URL → clear
-  error string, nothing posted. Success → short status string (e.g.
-  `sent 143 chars to Discord (embed=False)`). Acceptance: server starts over stdio.
+>
+> **Comment (T2a — config):** TDD: wrote `tests/test_config.py` first →
+> `uv run pytest -q` → **19 failed** (`ModuleNotFoundError`, then `AttributeError: no
+> attribute 'load_instructions'` — expected red). Implemented `config.py` →
+> **19 passed in 0.13s**. Covers: env-only webhook (blank/whitespace → None, legacy
+> `NOTIFY_RUX_*` ignored, no `/etc` fallback), instructions precedence file > URL >
+> default, missing/empty/directory file falls through, URL `URLError`/`HTTPError`/
+> blank-body falls through, fetch uses `INSTRUCTIONS_URL_TIMEOUT`, garbage env never
+> raises. `load_instructions` returns `(text, source)`; `source` is logged to stderr at
+> startup only — the LLM sees text, never a path or URL.
+>
+> **Comment (T2b — discord):** TDD: wrote `tests/test_discord.py` first →
+> `uv run pytest -q` → **25 failed, 19 passed** (`AttributeError: no attribute
+> 'urllib'` etc. — expected red). Implemented `discord.py` → **44 passed in 0.08s**.
+> Truncation: 0/1/1999/2000 untouched; 2001/3000/10000 → exactly 2000 chars ending in
+> `\n\n... (truncated)`; custom-limit param tested. Embed path truncates at
+> `EMBED_DESCRIPTION_MAX = 4096` (verified: 3000 chars pass through untouched, 5000 →
+> 4096 + note) — the 2000 limit is `content`-only, as flagged in the task. POST:
+> headers/method/body/timeout asserted via mocked `urlopen`; 200/204 ok; HTTPError
+> (400 + body), URLError, generic Exception → `(False, detail)`; stdout stays empty.
+> One live-socket test was removed from the suite to keep DoD #4 (zero real network in
+> pytest) honest; the closed-port proof moves to T5/D2.
+
+- [x] **T3 — FastMCP wiring.** `MCPServer("notify-human", instructions=<resolved text>)`
+  (see mcp 2.x deviation under T1); tool `send(message: str, embed: bool = False) ->
+  str`. Missing webhook URL → clear error, nothing posted. Success → short status
+  string (`sent 143 chars to Discord (embed=False)`). Acceptance: server starts over
+  stdio (proved in T5/D1).
+>
+> **Comment (T3):** TDD: `tests/test_server.py` first → **13 failed, 44 passed**
+> (`no attribute 'build_server'` — expected red) → implemented `server.py` →
+> **57 passed in 0.87s**. Covers: name + `instructions` injection (and default
+> fallback), exactly one tool `send`, schema `required=["message"]` + `embed` default
+> False, missing webhook → `ToolError` naming `NOTIFY_HUMAN_WEBHOOK_URL` with
+> `send_to_webhook` asserted not called, plain + embed payload shapes through the tool,
+> truncation reported in the status string, HTTP failure → `ToolError`, blank message
+> rejected, stdout stays empty. Added `tests/conftest.py` autouse fixture so ambient
+> `NOTIFY_HUMAN_*` env can't leak into tests. SDK import is
+> `MCPServer` with `FastMCP` fallback; `ToolError` likewise.
 
 - [ ] **T4 — pytest, zero real network.** `unittest.mock` on `urlopen` (and the
   instructions-URL fetch). Cases: truncation boundary (1999/2000/2001 chars, note
@@ -139,23 +188,26 @@ items stand unchanged.
 
 ## Commit plan (atomic, Conventional Commits)
 
-Commits are made per task as it completes — NOT batched at the end. Planned sequence
-(extra commits are fine if a task splits; a commit is never amended after push):
+Commits are made per task as it completes — NOT batched at the end. A commit is never
+amended after push.
+
+**Reconciled:** rule 1 (TDD) and rule 2 (green tree at every commit) collide if a
+failing-test commit is committed on its own. Resolution: each unit is ONE commit
+containing its tests + the implementation that makes them pass. The red run is still
+executed and its output recorded in the task comment, so TDD is honoured without ever
+committing a broken tree.
 
 | # | Commit | Task |
 |---|---|---|
 | 1 | `chore: add gitignore and progress ledger` | T0 |
 | 2 | `build(packaging): add pyproject skeleton and package layout` | T1 |
-| 3 | `test(config): add failing tests for env and instructions resolver` | T2a |
-| 4 | `feat(config): resolve webhook URL and instructions file/URL/default` | T2a |
-| 5 | `test(discord): add failing tests for truncation and payload builders` | T2b |
-| 6 | `feat(discord): add truncation, payload builders and webhook POST` | T2b |
-| 7 | `test(server): add failing tests for send tool contract` | T3 |
-| 8 | `feat(server): expose send tool with instructions injection` | T3 |
-| 9 | `test: cover HTTP failures and instructions fallbacks` | T4 |
-| 10 | `docs(readme): document install, per-machine config and publish steps` | T6 |
-| 11 | `chore: verify wheel build and console entry point` (dist/ stays ignored; commit only if anything changes) | T7 |
-| 12 | `docs(progress): record task evidence` (final ledger update) | T8 |
+| 3 | `feat(config): resolve webhook URL and instructions file/URL/default` | T2a |
+| 4 | `feat(discord): add truncation, payload builders and webhook POST` | T2b |
+| 5 | `feat(server): expose send tool with instructions injection` | T3 |
+| 6 | `test: cover HTTP failures and instructions fallbacks` | T4 |
+| 7 | `docs(readme): document install, per-machine config and publish steps` | T6 |
+| 8 | `chore: verify wheel build and console entry point` (dist/ stays ignored) | T7 |
+| 9 | `docs(progress): record task evidence` | T8 |
 
 T5 proof runs are verification, not code — their output lands in the Evidence log and
 in the T3/T4 commit comments. If a proof run exposes a bug, it becomes
