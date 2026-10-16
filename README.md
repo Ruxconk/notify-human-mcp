@@ -23,11 +23,11 @@ If no webhook URL is configured, `send` fails with a clear error and posts nothi
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/). No install step needed — `uvx` fetches and
-runs it:
+Requires [uv](https://docs.astral.sh/uv/). The package is not on PyPI yet, so
+install from the repository:
 
 ```bash
-uvx notify-human-mcp
+uvx --from git+https://github.com/Ruxconk/notify-human-mcp.git notify-human-mcp
 ```
 
 ## Per-machine setup
@@ -37,13 +37,20 @@ Add one block to your MCP client's config (Claude Desktop, Codex CLI, etc.):
 ```json
 "notify-human": {
   "command": "uvx",
-  "args": ["notify-human-mcp"],
+  "args": [
+    "--from",
+    "git+https://github.com/Ruxconk/notify-human-mcp.git",
+    "notify-human-mcp"
+  ],
   "env": {
     "NOTIFY_HUMAN_WEBHOOK_URL": "https://discord.com/api/webhooks/…",
     "NOTIFY_HUMAN_INSTRUCTIONS_FILE": "/path/to/your-instructions.md"
   }
 }
 ```
+
+For a local checkout, replace the git URL with the directory path:
+`"--from", "/path/to/notify-human-mcp"`.
 
 | Env var | Required | Meaning |
 |---|---|---|
@@ -81,7 +88,9 @@ you.
 
 ```bash
 uv sync                          # env + dev deps
-uv run pytest -q                 # 57 tests, HTTP fully mocked, zero real sockets
+uv run pytest -q                 # 58 tests, HTTP fully mocked, zero real sockets
+uvx ruff check src tests         # lint
+uvx ruff format --check src tests
 uv build                         # sdist + wheel into dist/
 ```
 

@@ -1,6 +1,7 @@
 # local-only planning docs (kept on disk, never shipped/committed)
 requirements.md
 PUBLISHING.md
+PROGRESS.md
 
 # editors
 .swp
@@ -13,4 +14,7 @@ __pycache__/
 .venv/
 dist/
 build/
-PROGRESS.md
+
+# test caches
+.pytest_cache/
+.ruff_cache/

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "notify-human-mcp"
 version = "0.1.0"
-description = "MCP server that pings a Discord webhook with a standardized end-of-work message, shaped by per-install editable instructions."
+description = "MCP server that pings a Discord webhook whenever the LLM needs your attention, shaped by per-install editable instructions."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -29,7 +29,14 @@ Repository = "https://github.com/Ruxconk/notify-human-mcp"
 notify-human-mcp = "notify_human_mcp.server:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "SIM", "RUF", "BLE", "UP"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/notify_human_mcp"]
