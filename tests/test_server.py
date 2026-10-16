@@ -197,3 +197,99 @@ def test_main_builds_server_from_env_and_exposes_app(monkeypatch):
     server.main()
     assert server._last_server is not None
     assert server._last_server.name == "notify-human"
+
+
+# --- template mode: send takes named fields, server assembles ---------------
+
+
+def _tmpl_file(tmp_path):
+    import json as _json
+
+    p = tmp_path / "t.json"
+    p.write_text(
+        _json.dumps(
+            {
+                "header": "{time} | {repo} — {title} {status_emoji}",
+                "lines": ["{ticket_line}", "model: {model} | Machine: {machine}"],
+                "statuses": {"done": "✅", "blocked": "🛑"},
+                "max_chars": 1000,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_template_mode_send_takes_named_fields(tmp_path):
+    from notify_human_mcp import template
+
+    t = template.load_template(_tmpl_file(tmp_path))
+    s = server.build_server(template=t, webhook_url="http://127.0.0.1:9/hook")
+    tool = run(s.list_tools())[0]
+    props = tool_schema(tool)["properties"]
+    assert "message" not in props
+    assert {"status", "title", "body", "ticket"} <= set(props)
+    assert tool_schema(tool)["required"] == ["status", "title", "body"]
+
+
+def test_template_mode_rejects_unknown_status(tmp_path):
+    from notify_human_mcp import template
+
+    t = template.load_template(_tmpl_file(tmp_path))
+    s = server.build_server(template=t, webhook_url="http://127.0.0.1:9/hook")
+    with (
+        patch.object(server.discord, "send_to_webhook") as m,
+        pytest.raises(ToolError) as ei,
+    ):
+        run(s.call_tool("send", {"status": "frobbed", "title": "x", "body": "y"}))
+    m.assert_not_called()
+    assert "done" in str(ei.value) and "blocked" in str(ei.value)
+
+
+def test_template_mode_rejects_missing_required_field(tmp_path):
+    from notify_human_mcp import template
+
+    t = template.load_template(_tmpl_file(tmp_path))
+    s = server.build_server(template=t, webhook_url="http://127.0.0.1:9/hook")
+    with pytest.raises(Exception) as ei:
+        run(s.call_tool("send", {"status": "done", "body": "y"}))
+    assert "title" in str(ei.value)
+
+
+def test_template_mode_posts_rendered_message(tmp_path):
+    from notify_human_mcp import template
+
+    t = template.load_template(_tmpl_file(tmp_path))
+    s = server.build_server(template=t, webhook_url="http://127.0.0.1:9/hook")
+    with _ok() as m:
+        res = run(
+            s.call_tool(
+                "send",
+                {"status": "done", "title": "Thing", "body": "- a", "ticket": "P-1"},
+            )
+        )
+    _, payload = m.call_args[0]
+    text = payload["content"]
+    assert " — Thing ✅" in text
+    assert "ticket: P-1" in text
+    assert text.endswith("- a")
+    assert "sent" in result_text(res)
+
+
+def test_template_mode_respects_max_chars(tmp_path):
+    from notify_human_mcp import template
+
+    t = template.load_template(_tmpl_file(tmp_path))
+    s = server.build_server(template=t, webhook_url="http://127.0.0.1:9/hook")
+    with (
+        patch.object(server.discord, "send_to_webhook") as m,
+        pytest.raises(ToolError) as ei,
+    ):
+        run(
+            s.call_tool(
+                "send",
+                {"status": "done", "title": "T", "body": "x" * 1500},
+            )
+        )
+    m.assert_not_called()
+    assert "1000" in str(ei.value)

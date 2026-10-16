@@ -70,6 +70,70 @@ def _fetch_url(url):
     return body.strip() or None
 
 
+class Resolution:
+    """Outcome of instruction resolution: which mode, and from where.
+
+    `mode` is "prose" or "template". In template mode `template` holds the
+    loaded template and `text` is generated guidance naming the statuses.
+    `error` is a non-fatal problem found on the way (e.g. a broken JSON
+    sibling that forced prose mode) — the caller logs it loudly.
+    """
+
+    def __init__(self, mode, text, source, template=None, error=None):
+        self.mode = mode
+        self.text = text
+        self.source = source
+        self.template = template
+        self.error = error
+
+
+def _template_sibling(path):
+    """The .json file beside a prose instructions file, or None."""
+    sibling = os.path.splitext(path)[0] + ".json"
+    return sibling if os.path.isfile(sibling) else None
+
+
+def resolve_instructions(env=None):
+    """Resolve the instruction mode and text. See `Resolution`.
+
+    The file named by NOTIFY_HUMAN_INSTRUCTIONS_FILE decides the mode by
+    extension: `.json` is a template, anything else is prose. A `.json` file
+    with the same stem beside a prose file takes precedence — if both exist,
+    JSON wins. A JSON file that exists but fails to load does NOT silently
+    downgrade: prose is used and `error` says why, so the startup log is loud.
+    The hosted URL and the built-in default are prose-only sources.
+    """
+    env = os.environ if env is None else env
+    path = (env.get(INSTRUCTIONS_FILE_ENV) or "").strip() if hasattr(env, "get") else ""
+
+    json_path = None
+    if path:
+        if path.lower().endswith(".json"):
+            json_path = path if os.path.isfile(path) else None
+        else:
+            json_path = _template_sibling(path)
+
+    if json_path:
+        from . import template as template_mod
+
+        try:
+            tmpl = template_mod.load_template(json_path)
+        except template_mod.TemplateError as e:
+            text, source = load_instructions(env)
+            return Resolution(
+                "prose", text, source, error=f"ignored template {json_path}: {e}"
+            )
+        return Resolution(
+            "template",
+            template_mod.build_llm_text(tmpl),
+            f"template:{json_path}",
+            template=tmpl,
+        )
+
+    text, source = load_instructions(env)
+    return Resolution("prose", text, source)
+
+
 def load_instructions(env=None):
     """Resolve the standing instructions for the LLM.
 

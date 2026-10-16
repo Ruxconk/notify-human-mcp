@@ -1,0 +1,10 @@
+{
+  "header": "[{machine}] {repo} {status_emoji}",
+  "lines": ["{ticket_line}", "by {model}"],
+  "statuses": {
+    "finished": "🏁",
+    "stuck": "🧱",
+    "ask": "🙋"
+  },
+  "max_chars": 800
+}

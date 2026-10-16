@@ -1,0 +1,11 @@
+{
+  "header": "{status_emoji} {title}",
+  "lines": [],
+  "statuses": {
+    "done": "✅",
+    "blocked": "🛑",
+    "question": "❓",
+    "warning": "⚠️"
+  },
+  "max_chars": 500
+}

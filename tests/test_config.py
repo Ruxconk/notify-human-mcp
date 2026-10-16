@@ -177,3 +177,71 @@ def _resp(body: bytes):
             return False
 
     return _R()
+
+
+# --- two-mode resolution: prose (.md/.txt) vs JSON template -----------------
+
+
+def _tmpl(tmp_path, name="x.json"):
+    import json as _json
+
+    p = tmp_path / name
+    p.write_text(
+        _json.dumps(
+            {
+                "header": "{time} | {repo} — {title} {status_emoji}",
+                "lines": [],
+                "statuses": {"done": "✅"},
+                "max_chars": 1000,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_prose_file_resolves_to_prose_mode(tmp_path):
+    md = tmp_path / "x.md"
+    md.write_text("be terse", encoding="utf-8")
+    r = config.resolve_instructions({config.INSTRUCTIONS_FILE_ENV: str(md)})
+    assert r.mode == "prose"
+    assert r.text == "be terse"
+    assert r.source == "file"
+
+
+def test_json_file_resolves_to_template_mode(tmp_path):
+    p = _tmpl(tmp_path)
+    r = config.resolve_instructions({config.INSTRUCTIONS_FILE_ENV: str(p)})
+    assert r.mode == "template"
+    assert r.template["statuses"] == {"done": "✅"}
+    assert "done" in r.text  # generated guidance names the statuses
+
+
+def test_json_sibling_wins_over_prose_file(tmp_path):
+    md = tmp_path / "x.md"
+    md.write_text("be terse", encoding="utf-8")
+    _tmpl(tmp_path)  # x.json alongside x.md
+    r = config.resolve_instructions({config.INSTRUCTIONS_FILE_ENV: str(md)})
+    assert r.mode == "template"
+
+
+def test_no_json_sibling_stays_prose(tmp_path):
+    md = tmp_path / "x.md"
+    md.write_text("be terse", encoding="utf-8")
+    r = config.resolve_instructions({config.INSTRUCTIONS_FILE_ENV: str(md)})
+    assert r.mode == "prose"
+
+
+def test_broken_json_is_loud_not_silent_prose(tmp_path):
+    md = tmp_path / "x.md"
+    md.write_text("be terse", encoding="utf-8")
+    bad = tmp_path / "x.json"
+    bad.write_text("{oops", encoding="utf-8")
+    r = config.resolve_instructions({config.INSTRUCTIONS_FILE_ENV: str(md)})
+    assert r.mode == "prose"
+    assert r.error and "x.json" in r.error  # logged loudly, not swallowed
+
+
+def test_url_and_default_stay_prose_mode():
+    r = config.resolve_instructions({})
+    assert r.mode == "prose" and r.source == "default"

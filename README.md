@@ -19,7 +19,7 @@ One tool is exposed:
 
 | Tool | Args | Behaviour |
 |---|---|---|
-| `send` | `message: str` (required), `embed: bool = False` | Posts to your Discord webhook. `embed=False` → markdown text; `embed=True` → rich embed card. Messages over the limit (2000 plain / 4096 embed) are **rejected with the limit named**, not truncated, so the caller can shorten and retry. Returns a short status string. |
+| `send` | prose mode: `message: str` (required), `embed: bool = False` · template mode: `status`, `title`, `body` (required), `ticket`, `model` | Posts to your Discord webhook. Prose: `embed=False` → markdown text, `embed=True` → rich embed card; over the limit (2000 plain / 4096 embed) is **rejected with the limit named**, not truncated. Template: the server assembles the text, so shape errors are rejected with the reason. Returns a short status string. |
 
 If no webhook URL is configured, `send` fails with a clear error and posts nothing.
 
@@ -57,8 +57,8 @@ For a local checkout, replace the git URL with the directory path:
 | Env var | Required | Meaning |
 |---|---|---|
 | `NOTIFY_HUMAN_WEBHOOK_URL` | yes | Your Discord webhook URL. Each machine/user gets its own. |
-| `NOTIFY_HUMAN_INSTRUCTIONS_FILE` | no | Local instructions file (primary source). |
-| `NOTIFY_HUMAN_INSTRUCTIONS_URL` | no | Hosted instructions URL (secondary; fetched at startup). |
+| `NOTIFY_HUMAN_INSTRUCTIONS_FILE` | no | Instructions file: `.md`/`.txt` = prose, `.json` = template (see below). |
+| `NOTIFY_HUMAN_INSTRUCTIONS_URL` | no | Hosted instructions URL (prose only; fetched at startup). |
 
 Instructions are resolved in order: **file → URL → built-in default**. A missing file
 or failed fetch falls through silently — the server always starts.
@@ -70,6 +70,34 @@ version does nothing until the client restarts the server — and when you insta
 a local path, `uvx` caches the built wheel per content hash, so a rebuilt package
 needs that same restart to take effect. If notifications come back in the old format
 after you edited the file, this is why.
+
+### Two instruction modes
+
+**Prose mode** (default): a `.md`/`.txt` file of plain-language rules. The LLM reads
+them and tries to comply — flexible, zero setup, best-effort.
+
+**Template mode**: point `NOTIFY_HUMAN_INSTRUCTIONS_FILE` at a `.json` file and the
+format is enforced by construction. `send` then takes named fields — `status`,
+`title`, `body`, optional `ticket` — and the server assembles the message from the
+template, so the shape cannot drift. An unknown status or a missing field is
+rejected with the reason, nothing posted. Structure:
+
+```json
+{
+  "header": "{time} | {repo} — {title} {status_emoji}",
+  "lines": ["{ticket_line}", "model: {model} | Machine: {machine}"],
+  "statuses": {"done": "✅", "blocked": "🛑", "question": "❓"},
+  "max_chars": 1000
+}
+```
+
+Placeholders: `time`, `repo`, `title`, `status_emoji`, `ticket_line`, `model`,
+`machine`. A line that renders empty (e.g. no ticket) is dropped. `max_chars` is a
+hard ceiling on the rendered message. Working examples: [examples/](examples)
+(`template-minimal.json`, `template-full.json`, `template-team.json`) — copy one and
+edit the values. Startup logs the mode and source on stderr; if a prose file and a
+same-stem `.json` both exist, **JSON wins**, and a broken JSON file is reported
+loudly rather than silently downgrading to prose.
 
 ### Writing the instructions file
 
@@ -96,7 +124,7 @@ you.
 
 ```bash
 uv sync                          # env + dev deps
-uv run pytest -q                 # 66 tests, HTTP mocked or loopback-only, zero real sockets
+uv run pytest -q                 # 85 tests, HTTP mocked or loopback-only, zero real sockets
 uvx ruff check src tests         # lint
 uvx ruff format --check src tests
 uv build                         # sdist + wheel into dist/

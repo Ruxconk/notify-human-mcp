@@ -1,0 +1,12 @@
+{
+  "header": "{time} | {repo} — {title} {status_emoji}",
+  "lines": ["{ticket_line}", "model: {model} | Machine: {machine}"],
+  "statuses": {
+    "done": "✅",
+    "blocked": "🛑",
+    "question": "❓",
+    "warning": "⚠️",
+    "milestone": "⏳"
+  },
+  "max_chars": 1000
+}

@@ -57,17 +57,34 @@ INSTRUCTIONS_PATH_HINT = (
 )
 
 
-def build_server(instructions=None, webhook_url=None, instructions_path=None):
+TEMPLATE_SEND_DESCRIPTION = (
+    "Send one notification to the human's Discord whenever their attention is "
+    "needed: you are blocked, need a decision or missing info, have a warning, "
+    "something important happened mid-task, you finished, or the user asked to "
+    "be pinged. One message per event. Do not format the message yourself: "
+    "pass the named fields and the server assembles it from a fixed template. "
+    "`status` must be one of the statuses named in the instructions; `title` "
+    "is one short headline line; `body` is short bullets, no raw logs; "
+    "`ticket` is the tracker id if the work has one. Over-long messages are "
+    "rejected with the limit named — shorten and retry; nothing is posted."
+)
+
+
+def build_server(
+    instructions=None,
+    webhook_url=None,
+    instructions_path=None,
+    template=None,
+):
     """Build the MCP server.
 
     `instructions` is the standing text for the LLM (None -> config default).
     `webhook_url` overrides the environment; tests pass a fake local URL.
     `instructions_path` is the file the instructions came from; when set, the
     tool description tells the LLM where to re-read them after compaction.
+    `template` switches to template mode: `send` takes named fields and the
+    message is assembled by the server, so the format cannot drift.
     """
-    description = SEND_DESCRIPTION
-    if instructions_path:
-        description += INSTRUCTIONS_PATH_HINT.format(path=instructions_path)
     server = MCPServer(
         name=SERVER_NAME,
         instructions=instructions
@@ -75,6 +92,14 @@ def build_server(instructions=None, webhook_url=None, instructions_path=None):
         else config.DEFAULT_INSTRUCTIONS,
     )
     url = webhook_url if webhook_url is not None else config.get_webhook_url()
+
+    if template is not None:
+        _register_template_send(server, url, template)
+        return server
+
+    description = SEND_DESCRIPTION
+    if instructions_path:
+        description += INSTRUCTIONS_PATH_HINT.format(path=instructions_path)
 
     @server.tool(description=description)
     def send(message: str, embed: bool = False) -> str:
@@ -109,6 +134,45 @@ def build_server(instructions=None, webhook_url=None, instructions_path=None):
     return server
 
 
+def _register_template_send(server, url, tmpl):
+    """Register the template-mode `send`: named fields in, rendered text out."""
+    from . import template as template_mod
+
+    status_values = ", ".join(sorted(tmpl["statuses"]))
+
+    @server.tool(description=TEMPLATE_SEND_DESCRIPTION)
+    def send(
+        status: str,
+        title: str,
+        body: str,
+        ticket: str = "",
+        model: str = "",
+    ) -> str:
+        """Assemble a notification from the template and post it."""
+        if not url:
+            raise ToolError(
+                "notify-human is not configured: set NOTIFY_HUMAN_WEBHOOK_URL in "
+                "this server's environment. Nothing was sent."
+            )
+        try:
+            message = template_mod.render_message(
+                tmpl,
+                status=status,
+                title=title,
+                body=body,
+                ticket=ticket or None,
+                model=model or None,
+            )
+        except template_mod.TemplateError as e:
+            raise ToolError(f"{e} Nothing was posted. (statuses: {status_values})")
+
+        payload = discord.build_plain_payload(message)
+        ok, detail = discord.send_to_webhook(url, payload)
+        if not ok:
+            raise ToolError(f"notify-human could not post to Discord ({detail}).")
+        return f"sent {len(message)} chars to Discord (template status={status})"
+
+
 def _run_stdio(server):
     """Block serving MCP over stdio. Split out so tests can stub it."""
     server.run(transport="stdio")
@@ -120,20 +184,24 @@ _last_server = None
 def main():
     """Console entry point: `notify-human-mcp`."""
     global _last_server
-    instructions, source = config.load_instructions()
-    instructions_path = (
-        (os.environ.get(config.INSTRUCTIONS_FILE_ENV) or "").strip()
-        if source == "file"
-        else ""
-    )
+    res = config.resolve_instructions()
+    if res.error:
+        print(f"notify-human: WARNING {res.error}", file=sys.stderr)
     print(
-        f"notify-human: instructions from {source} "
-        f"({len(instructions)} chars), webhook "
+        f"notify-human: mode={res.mode} instructions from {res.source} "
+        f"({len(res.text)} chars), webhook "
         f"{'set' if config.get_webhook_url() else 'NOT SET'}",
         file=sys.stderr,
     )
+    instructions_path = (
+        (os.environ.get(config.INSTRUCTIONS_FILE_ENV) or "").strip()
+        if res.mode == "prose" and res.source == "file"
+        else ""
+    )
     _last_server = build_server(
-        instructions=instructions, instructions_path=instructions_path or None
+        instructions=res.text,
+        instructions_path=instructions_path or None,
+        template=res.template,
     )
     _run_stdio(_last_server)
 
