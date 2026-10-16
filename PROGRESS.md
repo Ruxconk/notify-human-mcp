@@ -149,23 +149,40 @@ items stand unchanged.
 > `NOTIFY_HUMAN_*` env can't leak into tests. SDK import is
 > `MCPServer` with `FastMCP` fallback; `ToolError` likewise.
 
-- [ ] **T4 — pytest, zero real network.** `unittest.mock` on `urlopen` (and the
+- [x] **T4 — pytest, zero real network.** `unittest.mock` on `urlopen` (and the
   instructions-URL fetch). Cases: truncation boundary (1999/2000/2001 chars, note
   present, final length ≤ 2000), plain payload shape, embed payload shape, instructions
   precedence file > URL > default, missing file falls through, failed URL fetch falls
   through, missing webhook → error and no HTTP call, HTTP 200/204 success, HTTP 4xx and
   `URLError` → failure string. Acceptance: `uv run pytest -q` green.
+>
+> **Comment (T4):** all listed cases were covered by the T2/T3 suites (57 tests). The
+> new hardening: `tests/conftest.py::no_real_network` autouse fixture patches
+> `socket.socket.connect` and `socket.create_connection` to raise
+> `AssertionError("test attempted a real network connection")`. Guard proven
+> non-vacuous with a throwaway probe test that tried a direct `socket.connect` and a
+> real `urllib.request.urlopen` — both failed with exactly that message; probe deleted
+> after. `uv run pytest -q` → **57 passed in 0.86s**, zero sockets opened.
 
-- [ ] **T5 — DoD proof runs (executed, not asserted).**
-  - **D1:** driver script using `mcp.client.stdio` → `initialize` response carries a
-    non-empty `instructions` field sourced from the file; `tools/list` shows exactly
-    `send` with `message` required and `embed` defaulting to false.
-  - **D2:** `send` posts the correct payload — proven against a fake local webhook
-    (throwaway `http.server` on 127.0.0.1 capturing the POST body; plus
-    `http://127.0.0.1:9/` → connection refused → failure string, nothing posted).
-  - **D3:** truncation at 2000 with `... (truncated)`; both `embed=False` and
-    `embed=True` produce valid Discord payloads (dump the JSON bodies).
-  - **D4:** pytest green with mocked HTTP.
+- [x] **T5 — DoD proof runs (executed, not asserted).** Driver:
+  `/tmp/proof_dod.py` (throwaway, not committed) — real `mcp.client.stdio` client
+  against `python -m notify_human_mcp.server` subprocesses.
+  - **D1:** `initialize.instructions` == exact file text; `tools/list` == `['send']`,
+    `required=['message']`, `embed.default=False`.
+  - **D2:** fake webhook = `ThreadingHTTPServer` on 127.0.0.1 (ephemeral port)
+    captured 4 POST bodies, all `application/json`; closed port
+    `127.0.0.1:9` → `isError=True` "could not reach webhook: [Errno 111] Connection
+    refused", zero captures; unset webhook → `isError=True` naming
+    `NOTIFY_HUMAN_WEBHOOK_URL`, zero captures.
+  - **D3:** 2500-char plain → exactly 2000 chars ending `\n\n... (truncated)`;
+    5000-char embed → 4096 + note; status strings report the truncation.
+  - **D4:** pytest green with mocked HTTP (see T4).
+>
+> **Comment (T5):** ran `.venv/bin/python /tmp/proof_dod.py` → **ALL PROOFS PASSED**.
+> Observed during the run: mcp 2.x client models are snake_case (`input_schema`,
+> `is_error`) — driver fixed accordingly; server stderr shows
+> `notify-human: instructions from file (61 chars), webhook set`, confirming the
+> startup log. No real Discord contact: every URL was 127.0.0.1.
 
 - [ ] **T6 — README replacement.** Overwrite the 18-byte stub with: what it is (one
   tool, `send`), install/run via `uvx notify-human-mcp`, the per-machine client config
