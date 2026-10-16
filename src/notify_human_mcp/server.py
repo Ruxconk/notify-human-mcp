@@ -33,11 +33,11 @@ except ImportError:  # pragma: no cover - mcp 1.x path
 SERVER_NAME = "notify-human"
 
 SEND_DESCRIPTION = (
-    "Send one notification message to the human's Discord. Call it once when you "
-    "finish a task, or when the user asks to be pinged. Set embed=True for a rich "
-    "card instead of plain markdown."
+    "Send one notification to the human's Discord whenever their attention is "
+    "needed: you are blocked, need a decision or missing info, something important "
+    "happened mid-task, you finished a task, or the user asked to be pinged. "
+    "Set embed=True for a rich card instead of plain markdown."
 )
-
 
 def build_server(instructions=None, webhook_url=None):
     """Build the MCP server.

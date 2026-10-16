@@ -19,12 +19,14 @@ INSTRUCTIONS_URL_TIMEOUT = 10
 
 #: Fallback instructions when neither the file nor the URL yields text.
 DEFAULT_INSTRUCTIONS = (
-    "You have the `notify-human` tool. Use it to send exactly one notification when "
-    "you finish a task or when the user asks to be pinged.\n\n"
+    "You have the `notify-human` tool. Use it whenever the human's attention is "
+    "needed: you are blocked, you need a decision or missing information, something "
+    "important happened mid-task, you finished a task, or the user asked to be "
+    "pinged. One message per event.\n\n"
     "Format the message as Discord markdown:\n"
-    "1. A one-line status first (what happened: done / blocked / needs input).\n"
-    "2. A short summary of what changed.\n"
-    "3. Next steps or what you are waiting on.\n\n"
+    "1. A one-line status first (done / blocked / needs input / heads-up).\n"
+    "2. Short bullets of what is relevant — no walls of text.\n"
+    "3. What you need from the human, if anything.\n\n"
     "Keep it under 1000 characters. Do not paste raw logs or diffs."
 )
 
