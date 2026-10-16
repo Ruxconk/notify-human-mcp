@@ -47,6 +47,28 @@ def test_send_has_a_description_for_the_llm():
     assert tool.description and "Discord" in tool.description
 
 
+def test_send_description_includes_configured_instructions_path():
+    s = server.build_server(
+        instructions="X", instructions_path="/etc/notify-human/instructions.md"
+    )
+    tool = run(s.list_tools())[0]
+    assert "/etc/notify-human/instructions.md" in tool.description
+    assert "already" in tool.description  # conditional: read only if not in context
+
+
+def test_send_description_without_path_carries_fallback_rules():
+    tool = run(server.build_server().list_tools())[0]
+    assert "read" not in tool.description  # no path -> no read hint
+    assert "1000" in tool.description  # short hard rules still present
+
+
+def test_send_description_stays_under_context_budget():
+    tool = run(
+        server.build_server(instructions_path="/etc/notify-human/instructions.md").list_tools()
+    )[0]
+    assert len(tool.description) <= 700
+
+
 # --- send: missing webhook --------------------------------------------------
 
 
