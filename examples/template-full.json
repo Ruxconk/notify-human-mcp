@@ -8,5 +8,7 @@
     "warning": "⚠️",
     "milestone": "⏳"
   },
-  "max_chars": 1000
+  "max_chars": 1000,
+  "embed": true,
+  "guidance": "Short bullets, one fact each; no raw logs, diffs or stack traces. End with one clear ask, or say nothing is needed."
 }

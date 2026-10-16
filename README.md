@@ -78,26 +78,35 @@ them and tries to comply — flexible, zero setup, best-effort.
 
 **Template mode**: point `NOTIFY_HUMAN_INSTRUCTIONS_FILE` at a `.json` file and the
 format is enforced by construction. `send` then takes named fields — `status`,
-`title`, `body`, optional `ticket` — and the server assembles the message from the
-template, so the shape cannot drift. An unknown status or a missing field is
-rejected with the reason, nothing posted. Structure:
+`title`, `body`, optional `ticket`, `model`, `repo` — and the server assembles the
+message from the template, so the shape cannot drift. An unknown status or a
+missing field is rejected with the reason, nothing posted. Structure:
 
 ```json
 {
   "header": "{time} | {repo} — {title} {status_emoji}",
-  "lines": ["{ticket_line}", "model: {model} | Machine: {machine}"],
+  "lines": ["{ticket}", "model: {model} | Machine: {machine}"],
   "statuses": {"done": "✅", "blocked": "🛑", "question": "❓"},
-  "max_chars": 1000
+  "max_chars": 1000,
+  "embed": true,
+  "guidance": "Address him as Rux. Short bullets, one fact each; no raw logs."
 }
 ```
 
-Placeholders: `time`, `repo`, `title`, `status_emoji`, `ticket_line`, `model`,
-`machine`. A line that renders empty (e.g. no ticket) is dropped. `max_chars` is a
-hard ceiling on the rendered message. Working examples: [examples/](examples)
-(`template-minimal.json`, `template-full.json`, `template-team.json`) — copy one and
-edit the values. Startup logs the mode and source on stderr; if a prose file and a
-same-stem `.json` both exist, **JSON wins**, and a broken JSON file is reported
-loudly rather than silently downgrading to prose.
+Only `header` and `statuses` are required. Placeholders for `header`/`lines`:
+`time`, `repo`, `title`, `status_emoji`, `ticket_line`, `ticket`, `model`,
+`machine`. `ticket_line` renders `ticket: X`; `ticket` renders the raw value
+verbatim (e.g. `ENG-142 — rotate deploy keys`). A line that renders empty (no
+ticket, say) is dropped. `max_chars` is a hard ceiling on the rendered message.
+`embed: true` posts a rich card instead of a plain message, which lifts the
+Discord limit from 2000 to 4096 characters. `guidance` is free text appended to
+the instructions the LLM receives — the place for tone, persona and "when to
+ping" rules that a fixed structure cannot express. Working examples:
+[examples/](examples) (`template-minimal.json`, `template-full.json`,
+`template-team.json`) — copy one and edit the values. Startup logs the mode and
+source on stderr; if a prose file and a same-stem `.json` both exist, **JSON
+wins**, and a broken JSON file is reported loudly rather than silently
+downgrading to prose.
 
 ### Writing the instructions file
 
