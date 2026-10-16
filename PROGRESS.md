@@ -216,10 +216,16 @@ items stand unchanged.
 > NOT run.
 
 
-- [ ] **T8 — Final sweep + push.** Verify the working tree is clean, every task above
+- [x] **T8 — Final sweep + push.** Verify the working tree is clean, every task above
   has a `> **Comment:**` with command + output, and `requirements.md`/`PUBLISHING.md`
   are still ignored (`git status --ignored`). Push `main` to `origin`
   (`https://github.com/Ruxconk/notify-human-mcp.git`).
+>
+> **Comment (T8):** `git status --short` empty; `git status --ignored` shows
+> `requirements.md`, `PUBLISHING.md`, `.venv/`, `dist/`, caches all ignored; all tasks
+> carry comments with commands + outputs. Throwaway scaffolds deleted
+> (`/tmp/proof_dod.py`, `/tmp/wheel-venv`, guard probe). 10 commits pushed:
+> `a0c58a8..8b8b20b main -> main` to `github.com/Ruxconk/notify-human-mcp`.
 
 
 ## Commit plan (atomic, Conventional Commits)
@@ -249,7 +255,23 @@ T5 proof runs are verification, not code — their output lands in the Evidence 
 in the T3/T4 commit comments. If a proof run exposes a bug, it becomes
 `fix(<scope>): …` with its own failing test first.
 
-## Evidence log
+## Evidence log (roll-up)
 
-- **T0:** `.gitignore` written (198 B) with the two local docs + python/editor
-  patterns; `PROGRESS.md` created. No code written yet.
+- **DoD 1** — stdio `initialize` returned `instructions` == file text; `tools/list`
+  == `['send']`, `required=['message']`, `embed.default=False` (T5/D1, also against
+  the installed wheel).
+- **DoD 2** — fake local webhook captured exactly the expected JSON POST bodies
+  (plain + embed); closed port and unset webhook both fail cleanly with zero POSTs
+  (T5/D2).
+- **DoD 3** — 2500-char plain → 2000 + `\n\n... (truncated)`; 5000-char embed → 4096
+  + note; both payload shapes valid (T5/D3, T2b unit tests).
+- **DoD 4** — `uv run pytest -q` → **57 passed**, `unittest.mock` HTTP + autouse
+  socket guard proven to block real connects (T4).
+- **DoD 5** — README replaced, `.gitignore` added, 10 atomic Conventional commits
+  pushed `a0c58a8..8b8b20b`; `requirements.md`/`PUBLISHING.md` local-only per
+  amendment.
+- **DoD 6** — `uv build` artifacts verified (entry point + `Requires-Dist: mcp>=1.0`);
+  `uv publish` NOT run; commands documented in README.
+- **Bugs caught during verification:** missing `mcp` dependency in wheel metadata
+  (fixed `64af5ab`); mcp 2.x renames `FastMCP`→`MCPServer`, `inputSchema`→
+  `input_schema`, `isError`→`is_error` (handled with import fallbacks).
