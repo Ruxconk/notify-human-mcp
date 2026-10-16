@@ -1,8 +1,11 @@
 # notify-human-mcp
 
-An [MCP](https://modelcontextprotocol.io) server that gives your LLM one job: ping
-your Discord when it finishes work — in a **standardized format you control from a
-file**, not from each model's habits.
+An [MCP](https://modelcontextprotocol.io) server that gives your LLM a way to reach
+you on Discord **whenever it needs your attention** — a question it can't answer
+itself, a blocker, a decision it needs from you, something worth knowing mid-task, or
+work that's finished. Not just an end-of-task bell: a general human-attention channel.
+Every message arrives in a **standardized format you control from a file**, not from
+each model's habits.
 
 The server reads your instructions file at every client launch and hands the text to
 the MCP client as its `instructions` field. The client injects it into the LLM's
@@ -55,12 +58,16 @@ Restart the client after editing the file; the server re-reads it on every launc
 
 ### Writing the instructions file
 
-This file is the format control. Example:
+This file is the format control — and it decides *when* the LLM may ping you, not
+just how. Example:
 
 ```markdown
-Use the `send` tool exactly once at the end of every task.
-Format: one-line status (done / blocked / needs input), then a short summary of
-what changed, then next steps. Keep it under 1000 characters. No raw logs.
+Use the `send` tool whenever the human's attention is needed: you are blocked, you
+need a decision or missing information, something important happened mid-task, or
+you finished. One message per event — no play-by-play.
+Format: one-line status first (done / blocked / needs input / FYI), then a short
+summary, then what you need from the human (if anything). Keep it under 1000
+characters. No raw logs.
 ```
 
 Point several machines at the same file contents (or the same hosted URL) to get one
