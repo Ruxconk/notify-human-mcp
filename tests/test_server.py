@@ -64,7 +64,9 @@ def test_send_description_without_path_carries_fallback_rules():
 
 def test_send_description_stays_under_context_budget():
     tool = run(
-        server.build_server(instructions_path="/etc/notify-human/instructions.md").list_tools()
+        server.build_server(
+            instructions_path="/etc/notify-human/instructions.md"
+        ).list_tools()
     )[0]
     assert len(tool.description) <= 700
 
@@ -111,13 +113,38 @@ def test_send_embed_posts_embed_payload():
     assert "embed=True" in res.content[0].text
 
 
-def test_send_reports_truncation():
+def test_send_rejects_over_limit_plain_and_posts_nothing():
     s = server.build_server(webhook_url="http://127.0.0.1:9/hook")
-    with _ok() as m:
-        res = run(s.call_tool("send", {"message": "x" * 2500}))
-    _, payload = m.call_args[0]
-    assert len(payload["content"]) == 2000
-    assert "truncated" in res.content[0].text
+    with (
+        patch.object(server.discord, "send_to_webhook") as m,
+        pytest.raises(ToolError) as ei,
+    ):
+        run(s.call_tool("send", {"message": "x" * 2500}))
+    m.assert_not_called()
+    assert "2000" in str(ei.value)
+
+
+def test_send_rejects_over_limit_embed_and_posts_nothing():
+    s = server.build_server(webhook_url="http://127.0.0.1:9/hook")
+    with (
+        patch.object(server.discord, "send_to_webhook") as m,
+        pytest.raises(ToolError) as ei,
+    ):
+        run(s.call_tool("send", {"message": "x" * 5000, "embed": True}))
+    m.assert_not_called()
+    assert "4096" in str(ei.value)
+
+
+def test_over_limit_rejection_is_deterministic():
+    def reason(embed):
+        s = server.build_server(webhook_url="http://127.0.0.1:9/hook")
+        try:
+            run(s.call_tool("send", {"message": "x" * 3000, "embed": embed}))
+        except ToolError as e:
+            return str(e)
+
+    assert reason(False) == reason(False)
+    assert reason(True) == reason(True)
 
 
 def test_send_reports_http_failure_as_error():

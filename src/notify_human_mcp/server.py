@@ -43,7 +43,8 @@ SEND_DESCRIPTION = (
     "warning about the current task, something important happened mid-task, you "
     "finished, or the user asked to be pinged. One message per event — do not spam "
     "the user. Keep it under 1000 characters: status line first, short bullets, "
-    "the ask last. Plain messages truncate at 2000 characters, embeds at 4096. "
+    "the ask last. Messages over 2000 characters (plain) or 4096 (embed) are "
+    "rejected, not truncated — shorten before sending. "
     "Set embed=True for a rich card instead of plain markdown."
 )
 
@@ -86,23 +87,24 @@ def build_server(instructions=None, webhook_url=None, instructions_path=None):
         if not message or not message.strip():
             raise ToolError("send needs a non-empty message. Nothing was sent.")
 
+        limit = discord.EMBED_DESCRIPTION_MAX if embed else discord.DISCORD_MAX_CONTENT
+        if len(message) > limit:
+            raise ToolError(
+                f"message is {len(message)} chars, over the {limit}-char limit "
+                f"for {'embed' if embed else 'plain'} messages. Shorten it and "
+                "send again; nothing was posted."
+            )
+
         if embed:
             payload = discord.build_embed_payload(message)
-            sent_len = len(payload["embeds"][0]["description"])
-            limit = discord.EMBED_DESCRIPTION_MAX
         else:
             payload = discord.build_plain_payload(message)
-            sent_len = len(payload["content"])
-            limit = discord.DISCORD_MAX_CONTENT
+        sent_len = len(message)
 
         ok, detail = discord.send_to_webhook(url, payload)
         if not ok:
             raise ToolError(f"notify-human could not post to Discord ({detail}).")
-
-        note = ""
-        if sent_len < len(message):
-            note = f" (truncated from {len(message)} chars at the {limit} limit)"
-        return f"sent {sent_len} chars to Discord (embed={embed}){note}"
+        return f"sent {sent_len} chars to Discord (embed={embed})"
 
     return server
 
