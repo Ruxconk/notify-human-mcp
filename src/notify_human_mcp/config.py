@@ -10,6 +10,8 @@ import os
 import urllib.error
 import urllib.request
 
+from . import USER_AGENT
+
 WEBHOOK_URL_ENV = "NOTIFY_HUMAN_WEBHOOK_URL"
 INSTRUCTIONS_FILE_ENV = "NOTIFY_HUMAN_INSTRUCTIONS_FILE"
 INSTRUCTIONS_URL_ENV = "NOTIFY_HUMAN_INSTRUCTIONS_URL"
@@ -43,7 +45,7 @@ def get_webhook_url(env=None):
 def _read_file(path):
     """Return the file's text, or None if it cannot be read or is blank."""
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             text = f.read()
     except (OSError, UnicodeDecodeError):
         return None
@@ -51,14 +53,19 @@ def _read_file(path):
 
 
 def _fetch_url(url):
-    """Return the text fetched from `url`, or None on any failure."""
+    """Return the text fetched from `url`, or None on any network failure.
+
+    Only I/O and decode failures fall through to the next source. Programming
+    errors (and the test suite's socket guard) must propagate, not be mistaken
+    for an unreachable URL.
+    """
     try:
         req = urllib.request.Request(
-            url, headers={"User-Agent": "notify-human-mcp/0.1"}, method="GET"
+            url, headers={"User-Agent": USER_AGENT}, method="GET"
         )
         with urllib.request.urlopen(req, timeout=INSTRUCTIONS_URL_TIMEOUT) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-    except Exception:
+    except (OSError, ValueError, UnicodeDecodeError):
         return None
     return body.strip() or None
 
@@ -67,8 +74,9 @@ def load_instructions(env=None):
     """Resolve the standing instructions for the LLM.
 
     Sources are tried in order: local file -> hosted URL -> built-in default.
-    A missing file or a failed fetch falls through; this never raises, because
-    it runs at process start and a bad path must not stop the server.
+    A missing file or an unreachable URL falls through to the next source, so a
+    bad path never stops the server at process start. Non-I/O errors (real bugs)
+    propagate instead of being mistaken for a missing source.
 
     Returns (text, source) where source is "file", "url" or "default".
     """

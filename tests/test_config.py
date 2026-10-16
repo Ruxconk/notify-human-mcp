@@ -100,21 +100,17 @@ def test_url_failure_falls_through_to_default():
     assert source == "default"
     assert text == config.DEFAULT_INSTRUCTIONS
 
+
 def test_empty_file_falls_through(tmp_path):
     f = tmp_path / "empty.md"
     f.write_text("   \n\n")
     text, source = config.load_instructions({FILE_ENV: str(f)})
     assert source == "default"
+    assert text == config.DEFAULT_INSTRUCTIONS
 
 
 def test_directory_as_file_falls_through(tmp_path):
     text, source = config.load_instructions({FILE_ENV: str(tmp_path)})
-    assert source == "default"
-
-
-def test_url_failure_falls_through_to_default():
-    env = {URL_ENV: "http://127.0.0.1:9/instructions.md"}
-    text, source = config.load_instructions(env)
     assert source == "default"
     assert text == config.DEFAULT_INSTRUCTIONS
 
@@ -127,6 +123,7 @@ def test_url_http_error_falls_through_to_default():
     with patch.object(config.urllib.request, "urlopen", side_effect=err):
         text, source = config.load_instructions(env)
     assert source == "default"
+    assert text == config.DEFAULT_INSTRUCTIONS
 
 
 def test_blank_url_body_falls_through_to_default():
@@ -135,6 +132,19 @@ def test_blank_url_body_falls_through_to_default():
         m.return_value = _resp(b"  \n ")
         text, source = config.load_instructions(env)
     assert source == "default"
+    assert text == config.DEFAULT_INSTRUCTIONS
+
+
+def test_url_programming_error_is_not_swallowed():
+    # A non-I/O failure must surface, not masquerade as an unreachable URL.
+    # The old bare `except Exception` hid real bugs (and the suite's own socket
+    # guard) behind a silent fall-through to the default instructions.
+    env = {URL_ENV: "http://example.invalid/i.md"}
+    with (
+        patch.object(config.urllib.request, "urlopen", side_effect=RuntimeError("bug")),
+        pytest.raises(RuntimeError, match="bug"),
+    ):
+        config.load_instructions(env)
 
 
 def test_url_fetch_has_a_timeout():
@@ -147,8 +157,10 @@ def test_url_fetch_has_a_timeout():
 
 def test_load_instructions_never_raises_on_garbage_env():
     # A non-mapping env must not blow up the process at startup.
-    text, source = config.load_instructions(None)
-    assert source == "default"
+    for garbage in (object(), 42, "not-a-mapping"):
+        text, source = config.load_instructions(garbage)
+        assert source == "default"
+        assert text == config.DEFAULT_INSTRUCTIONS
 
 
 def _resp(body: bytes):
