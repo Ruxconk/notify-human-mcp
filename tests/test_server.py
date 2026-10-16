@@ -1,13 +1,14 @@
 """Tests for the MCP server wiring: instructions injection and the send tool."""
 
 import asyncio
-import json
 from unittest.mock import patch
 
 import pytest
-from mcp.server.mcpserver.exceptions import ToolError
 
 from notify_human_mcp import server
+
+# The server module resolves ToolError across mcp 1.x/2.x; tests use the same.
+from notify_human_mcp.server import ToolError
 
 
 def run(coro):
@@ -51,9 +52,11 @@ def test_send_has_a_description_for_the_llm():
 
 def test_send_without_webhook_errors_and_does_not_post():
     s = server.build_server(webhook_url=None)
-    with patch.object(server.discord, "send_to_webhook") as m:
-        with pytest.raises(ToolError) as ei:
-            run(s.call_tool("send", {"message": "hi"}))
+    with (
+        patch.object(server.discord, "send_to_webhook") as m,
+        pytest.raises(ToolError) as ei,
+    ):
+        run(s.call_tool("send", {"message": "hi"}))
     m.assert_not_called()
     assert "NOTIFY_HUMAN_WEBHOOK_URL" in str(ei.value)
 
@@ -97,19 +100,23 @@ def test_send_reports_truncation():
 
 def test_send_reports_http_failure_as_error():
     s = server.build_server(webhook_url="http://127.0.0.1:9/hook")
-    with patch.object(
-        server.discord, "send_to_webhook", return_value=(False, "HTTP 400: bad")
+    with (
+        patch.object(
+            server.discord, "send_to_webhook", return_value=(False, "HTTP 400: bad")
+        ),
+        pytest.raises(ToolError) as ei,
     ):
-        with pytest.raises(ToolError) as ei:
-            run(s.call_tool("send", {"message": "hi"}))
+        run(s.call_tool("send", {"message": "hi"}))
     assert "HTTP 400" in str(ei.value)
 
 
 def test_send_rejects_empty_message():
     s = server.build_server(webhook_url="http://127.0.0.1:9/hook")
-    with patch.object(server.discord, "send_to_webhook") as m:
-        with pytest.raises(ToolError):
-            run(s.call_tool("send", {"message": "   "}))
+    with (
+        patch.object(server.discord, "send_to_webhook") as m,
+        pytest.raises(ToolError),
+    ):
+        run(s.call_tool("send", {"message": "   "}))
     m.assert_not_called()
 
 

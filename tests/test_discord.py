@@ -9,7 +9,6 @@ import pytest
 
 from notify_human_mcp import discord
 
-
 # --- truncation ------------------------------------------------------------
 
 
@@ -147,11 +146,12 @@ def test_post_success_statuses(status):
 def test_post_embed_payload_body():
     with patch.object(discord.urllib.request, "urlopen") as m:
         m.return_value = _resp(204)
-        ok, _ = discord.send_to_webhook(
+        ok, detail = discord.send_to_webhook(
             "http://x/hook", discord.build_embed_payload("hi")
         )
     req = m.call_args[0][0]
     body = json.loads(req.data.decode())
+    assert ok is True, detail
     assert body["embeds"][0]["description"] == "hi"
 
 

@@ -1,6 +1,7 @@
 """Keep every test hermetic: no ambient env vars, no real network."""
 
 import socket
+
 import pytest
 
 NOTIFY_VARS = [
